@@ -5,7 +5,7 @@ import time
 
 @dataclass
 class Segment:
-    id: int
+    id: str
     refCount: int
     rows: List[Tuple[int, str]]
 
@@ -17,9 +17,16 @@ def writeSegment(segment : Segment):
         f.write(str(segment.refCount) + "\n")
         f.write("\n".join([f"{r[0]}\t{r[1]}" for r in segment.rows]))
 
+def readSegment(id : str):
+    with open(f"segments/{id}") as f:
+        lines = f.readlines()
+        refCount = int(lines[0])
+        rows = [tuple(line.strip().split("\t")) for line in lines[1:]]
+        return Segment(id, refCount, rows)
 
 def __main__():
     segment = Segment(newSegmentId(), 1, [(1, "Evan"), (2, "James")])
     writeSegment(segment)
+    print(readSegment(segment.id))
 
 __main__()
