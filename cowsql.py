@@ -29,7 +29,10 @@ def readSegment(id : str):
     with open(f"segments/{id}") as f:
         lines = f.readlines()
     refCount = int(lines[0])
-    rows = [tuple(line.strip().split("\t")) for line in lines[1:]]
+    def readRow(str):
+        id, name = str.strip().split("\t")
+        return (int(id), name)
+    rows = [readRow(line) for line in lines[1:]]
     return Segment(id, refCount, rows)
 
 def createTable(name : str):
@@ -54,7 +57,7 @@ def find_id(table : list[SegmentPointer], id : int):
     for p_index, p in enumerate(table):
         if id >= p.min and id <= p.max:
             segment = readSegment(p.id)
-            index = next((i for i, r in segment.rows if r[0] == id), None)
+            index = next((i for i, r in enumerate(segment.rows) if r[0] == id), None)
             if index:
                 return p_index, segment, index
 
@@ -69,11 +72,10 @@ def upsert(name : str, id : int, value : str):
     p_index, segment, index = find_id(table, id)
     if segment:
         # The row exists; update it
-        segment.rows[index][1] = value
+        segment.rows[index] = (id, value)
         writeSegment(segment)
     else:
         p_index = find_not_full(table)
-        print("available: ", p_index)
         if p_index != None:
             # Add to an existing non-full segment.
             segment = readSegment(table[p_index].id)
@@ -94,6 +96,13 @@ def upsert(name : str, id : int, value : str):
 
     print(segment)
 
+def query(name : str, id : int):
+    table = readTable(name)
+    _, segment, index = find_id(table, id)
+    if not segment:
+        return None
+    return segment.rows[index][1]
+
 
 def __main__():
     segment = Segment(newSegmentId(), 1, [(1, "Evan"), (2, "James")])
@@ -101,11 +110,13 @@ def __main__():
     print(readSegment(segment.id))
     createTable("t1")
     upsert("t1", 1, "Evan")
+    upsert("t1", 2, "Jim")
     upsert("t1", 2, "James")
     upsert("t1", 4, "Tim")
     upsert("t1", 5, "Nancy")
     upsert("t1", 3, "Binish")
     print(readTable("t1"))
+    print(query("t1", 2))
 
 
 __main__()
