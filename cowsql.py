@@ -24,9 +24,15 @@ def readSegment(id : str):
         rows = [tuple(line.strip().split("\t")) for line in lines[1:]]
         return Segment(id, refCount, rows)
 
+def createTable(name : str):
+    with open(f"tables/{name}", "w") as f:
+        f.close()
+
 def __main__():
     segment = Segment(newSegmentId(), 1, [(1, "Evan"), (2, "James")])
     writeSegment(segment)
     print(readSegment(segment.id))
+    createTable("t1")
+
 
 __main__()
