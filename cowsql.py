@@ -1,7 +1,18 @@
+"""Simple database
+Demonstrates a super-simple file based id-value store.
+
+Usage:
+    cowsql.py create <table_name>
+    cowsql.py query  <table_name> <id>
+    cowsql.py upsert <table_name> <id> <value>
+    cowsql.py delete <table_name> <id>
+"""
 from dataclasses import dataclass
 from typing import Tuple, List
 import os
 import time
+
+from docopt import docopt
 
 SEGMENT_SIZE = 4
 
@@ -104,8 +115,6 @@ class Table:
                 self.segments.append(SegmentPointer(segment.id, 1, id, id))
                 self.save()
 
-        print(segment)
-
     def query(self, id : int):
         _, segment, index = self.find_id(id)
         if segment == None:
@@ -114,7 +123,6 @@ class Table:
 
     def delete(self, id : int):
         p_index, segment, index = self.find_id(id)
-        print("deleting from", segment)
         if segment == None:
             return
 
@@ -129,20 +137,20 @@ class Table:
             self.segments[p_index].size -= 1
             self.save(table)
 
-def __main__():
-    t1 = Table.create("t1")
-    t1.upsert(1, "Evan")
-    t1.upsert(2, "Jim")
-    t1.upsert(2, "James")
-    t1.upsert(4, "Tim")
-    t1.upsert(5, "Nancy")
-    t1.upsert(3, "Binish")
-    print(Table.load("t1"))
-    print(t1.query(2))
-    print(t1.query(1))
-    t1.delete(3)
-    print(Table.load("t1"))
-    print(t1.query(3))
+def main():
+    opts = docopt(__doc__)
+    if opts["create"]:
+        Table.create(opts["<table_name>"])
+    else:
+        table = Table.load(opts["<table_name>"])
+        id = int(opts["<id>"])
+        value = opts["<value>"]
+        if opts["query"]:
+            print(table.query(id))
+        elif opts["upsert"]:
+            table.upsert(id, value)
+        elif opts["delete"]:
+            table.delete(id)
+    print("Table is now", table)
 
-
-__main__()
+main()
