@@ -6,6 +6,7 @@ Usage:
     cowsql.py query  <table_name> <id>
     cowsql.py upsert <table_name> <id> <value>
     cowsql.py delete <table_name> <id>
+    cowsql.py clone  <source> <target>
 """
 from dataclasses import dataclass
 from typing import Tuple, List
@@ -139,6 +140,15 @@ class Table:
             self.segments[p_index].size -= 1
             self.save()
 
+    def clone(self, target_name):
+        self.name = target_name
+        self.save()
+        for segment_pointer in self.segments:
+            segment = Segment.load(segment_pointer.id)
+            segment.ref_count += 1
+            segment.save()
+
+
     def pretty(self):
         lines = [f"# {self.name}"]
         for pointer in self.segments:
@@ -153,6 +163,9 @@ def main():
     opts = docopt(__doc__)
     if opts["create"]:
         table = Table.create(opts["<table_name>"])
+    elif opts["clone"]:
+        table = Table.load(opts["<source>"])
+        table.clone(opts["<target>"])
     else:
         table = Table.load(opts["<table_name>"])
         id = int(opts["<id>"])
