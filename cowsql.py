@@ -30,6 +30,7 @@ class Segment:
             f.write(str(self.ref_count) + "\n")
             f.write("\n".join([f"{r[0]}\t{r[1]}" for r in self.rows]))
 
+    @staticmethod
     def load(id : str):
         with open(f"segments/{id}") as f:
             lines = f.readlines()
@@ -55,11 +56,13 @@ class Table:
     name: str
     segments: List[SegmentPointer]
 
+    @staticmethod
     def create(name: str):
         with open(f"tables/{name}", "w") as f:
             f.close()
         return Table(name, [])
 
+    @staticmethod
     def load(name : str):
         with open(f"tables/{name}") as f:
             lines = f.readlines()
@@ -134,7 +137,7 @@ class Table:
             segment.rows.pop(index)
             segment.save()
             self.segments[p_index].size -= 1
-            self.save(table)
+            self.save()
 
     def pretty(self):
         lines = [f"# {self.name}"]
