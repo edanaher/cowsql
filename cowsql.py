@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """Simple database
 Demonstrates a super-simple file based id-value store.
 
@@ -6,6 +7,7 @@ Usage:
     cowsql.py query  <table_name> <id>
     cowsql.py upsert <table_name> <id> <value>
     cowsql.py delete <table_name> <id>
+    cowsql.py clone  <source_table> <target_table>
 """
 from dataclasses import dataclass
 from typing import Tuple, List
@@ -91,10 +93,26 @@ class Table:
 
         return (None, None, None)
 
+    def cow_segment(self, p_index, segment):
+        if segment.ref_count > 1:
+            new_segment = Segment(new_segment_id(), 1, segment.rows)
+            new_segment.save()
+            self.segments[p_index].id = new_segment.id
+            self.save()
+
+            segment.ref_count -= 1
+            segment.save()
+
+            return new_segment
+        return segment
+
     def upsert(self, id : int, value : str):
         p_index, segment, index = self.find_id(id)
+        # Make a copy of the segment if necessary
         if segment:
             # The row exists; update it
+            segment = self.cow_segment(p_index, segment)
+
             segment.rows[index] = (id, value)
             segment.save()
         else:
@@ -102,6 +120,7 @@ class Table:
             if p_index != None:
                 # Add to an existing non-full segment.
                 segment = Segment.load(self.segments[p_index].id)
+                segment = self.cow_segment(p_index, segment)
                 segment.rows.append((id, value))
                 segment.save()
                 if id < self.segments[p_index].min:
@@ -129,15 +148,28 @@ class Table:
             return
 
         if self.segments[p_index].size == 1:
-            segment.delete()
+            if segment.ref_count == 1:
+                segment.delete()
+            else:
+                segment.ref_count -= 1
+                segment.save()
             self.segments.pop(p_index)
             self.save()
         else:
             # TODO: we should update the min/max.
+            segment = self.cow_segment(p_index, segment)
             segment.rows.pop(index)
             segment.save()
             self.segments[p_index].size -= 1
             self.save()
+
+    def clone(self, target_name: str):
+        new_table = Table(target_name, self.segments)
+        new_table.save()
+        for segment_pointer in self.segments:
+            segment = Segment.load(segment_pointer.id)
+            segment.ref_count += 1
+            segment.save()
 
     def pretty(self):
         lines = [f"# {self.name}"]
@@ -153,6 +185,9 @@ def main():
     opts = docopt(__doc__)
     if opts["create"]:
         table = Table.create(opts["<table_name>"])
+    elif opts["clone"]:
+        table = Table.load(opts["<source_table>"])
+        table.clone(opts["<target_table>"])
     else:
         table = Table.load(opts["<table_name>"])
         id = int(opts["<id>"])
