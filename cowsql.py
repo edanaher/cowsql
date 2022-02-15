@@ -31,6 +31,7 @@ class Segment:
             f.write(str(self.ref_count) + "\n")
             f.write("\n".join([f"{r[0]}\t{r[1]}" for r in self.rows]))
 
+
     @staticmethod
     def load(id : str):
         with open(f"segments/{id}") as f:
@@ -92,10 +93,30 @@ class Table:
 
         return (None, None, None)
 
+    def cow_segment(self, p_index, segment):
+        # If the segment only has one reference, we're fine.
+        if segment.ref_count == 1:
+            return segment
+
+        # Decrement the reference count of the existing segment.
+        segment.ref_count -= 1
+        segment.save()
+
+        # Create a new segment with the same rows and reference count 1
+        new_segment = Segment(new_segment_id(), 1, segment.rows)
+        new_segment.save()
+
+        # And update the table to point at the new segment
+        self.segments[p_index].id = new_segment.id
+        self.save()
+        return new_segment
+
+
     def upsert(self, id : int, value : str):
         p_index, segment, index = self.find_id(id)
         if segment:
             # The row exists; update it
+            segment = self.cow_segment(p_index, segment)
             segment.rows[index] = (id, value)
             segment.save()
         else:
@@ -103,6 +124,7 @@ class Table:
             if p_index != None:
                 # Add to an existing non-full segment.
                 segment = Segment.load(self.segments[p_index].id)
+                segment = self.cow_segment(p_index, segment)
                 segment.rows.append((id, value))
                 segment.save()
                 if id < self.segments[p_index].min:
@@ -130,11 +152,16 @@ class Table:
             return
 
         if self.segments[p_index].size == 1:
-            segment.delete()
+            if segment.ref_count == 1:
+                segment.delete()
+            else:
+                segment.ref_count -= 1
+                segment.save()
             self.segments.pop(p_index)
             self.save()
         else:
             # TODO: we should update the min/max.
+            segment = self.cow_segment(p_index, segment)
             segment.rows.pop(index)
             segment.save()
             self.segments[p_index].size -= 1
