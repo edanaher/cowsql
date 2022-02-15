@@ -29,6 +29,9 @@ class Segment:
         rows = [read_row(line) for line in lines[1:]]
         return Segment(id, ref_count, rows)
 
+    def delete(self):
+        os.remove(f"segments/{self.id}")
+
 
 @dataclass
 class SegmentPointer:
@@ -75,78 +78,71 @@ class Table:
 
         return (None, None, None)
 
-def upsert(name : str, id : int, value : str):
-    table = Table.load(name)
-    p_index, segment, index = table.find_id(id)
-    if segment:
-        # The row exists; update it
-        segment.rows[index] = (id, value)
-        segment.save()
-    else:
-        p_index = table.find_not_full()
-        if p_index != None:
-            # Add to an existing non-full segment.
-            segment = Segment.load(table.segments[p_index].id)
-            segment.rows.append((id, value))
+    def upsert(self, id : int, value : str):
+        p_index, segment, index = self.find_id(id)
+        if segment:
+            # The row exists; update it
+            segment.rows[index] = (id, value)
             segment.save()
-            if id < table.segments[p_index].min:
-                table.segments[p_index].min = id
-            elif id > table.segments[p_index].max:
-                table.segments[p_index].max = id
-            table.segments[p_index].size += 1
-            table.save()
         else:
-            # Add a new segment
-            segment = Segment(new_segment_id(), 1, [(id, value)])
+            p_index = self.find_not_full()
+            if p_index != None:
+                # Add to an existing non-full segment.
+                segment = Segment.load(self.segments[p_index].id)
+                segment.rows.append((id, value))
+                segment.save()
+                if id < self.segments[p_index].min:
+                    self.segments[p_index].min = id
+                elif id > self.segments[p_index].max:
+                    self.segments[p_index].max = id
+                self.segments[p_index].size += 1
+                self.save()
+            else:
+                # Add a new segment
+                segment = Segment(new_segment_id(), 1, [(id, value)])
+                segment.save()
+                self.segments.append(SegmentPointer(segment.id, 1, id, id))
+                self.save()
+
+        print(segment)
+
+    def query(self, id : int):
+        _, segment, index = self.find_id(id)
+        if segment == None:
+            return None
+        return segment.rows[index][1]
+
+    def delete(self, id : int):
+        p_index, segment, index = self.find_id(id)
+        print("deleting from", segment)
+        if segment == None:
+            return
+
+        if self.segments[p_index].size == 1:
+            segment.delete()
+            self.segments.pop(p_index)
+            self.save()
+        else:
+            # TODO: we should update the min/max.
+            segment.rows.pop(index)
             segment.save()
-            table.segments.append(SegmentPointer(segment.id, 1, id, id))
-            table.save()
-
-    print(segment)
-
-def query(name : str, id : int):
-    table = Table.load(name)
-    _, segment, index = table.find_id(id)
-    if segment == None:
-        return None
-    return segment.rows[index][1]
-
-def delete_segment(id : str):
-    os.remove(f"segments/{id}")
-
-def delete(name : str, id : int):
-    table = Table.load(name)
-    p_index, segment, index = table.find_id(id)
-    print("deleting from", segment)
-    if segment == None:
-        return
-
-    if table.segments[p_index].size == 1:
-        delete_segment(segment.id)
-        table.segments.pop(p_index)
-        table.save()
-    else:
-        # TODO: we should update the min/max.
-        segment.rows.pop(index)
-        segment.save()
-        table.segments[p_index].size -= 1
-        table.save(table)
-
+            self.segments[p_index].size -= 1
+            self.save(table)
 
 def __main__():
-    Table.create("t1")
-    upsert("t1", 1, "Evan")
-    upsert("t1", 2, "Jim")
-    upsert("t1", 2, "James")
-    upsert("t1", 4, "Tim")
-    upsert("t1", 5, "Nancy")
-    upsert("t1", 3, "Binish")
+    t1 = Table.create("t1")
+    t1.upsert(1, "Evan")
+    t1.upsert(2, "Jim")
+    t1.upsert(2, "James")
+    t1.upsert(4, "Tim")
+    t1.upsert(5, "Nancy")
+    t1.upsert(3, "Binish")
     print(Table.load("t1"))
-    print(query("t1", 2))
-    print(query("t1", 1))
-    delete("t1", 3)
+    print(t1.query(2))
+    print(t1.query(1))
+    t1.delete(3)
     print(Table.load("t1"))
-    print(query("t1", 3))
+    print(t1.query(3))
 
 
 __main__()
