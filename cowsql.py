@@ -43,7 +43,6 @@ class Segment:
     def delete(self):
         os.remove(f"segments/{self.id}")
 
-
 @dataclass
 class SegmentPointer:
     id: str
@@ -137,20 +136,32 @@ class Table:
             self.segments[p_index].size -= 1
             self.save(table)
 
+    def pretty(self):
+        lines = [f"# {self.name}"]
+        for pointer in self.segments:
+            segment = Segment.load(pointer.id)
+            lines.append(f"- {pointer.id} - size({pointer.size}) ids({pointer.min}-{pointer.max}) ref_count({segment.ref_count})")
+            for row in segment.rows:
+                lines.append(f"  - {row[0]} {row[1]}")
+        return lines
+        
+
 def main():
     opts = docopt(__doc__)
     if opts["create"]:
-        Table.create(opts["<table_name>"])
+        table = Table.create(opts["<table_name>"])
     else:
         table = Table.load(opts["<table_name>"])
         id = int(opts["<id>"])
         value = opts["<value>"]
         if opts["query"]:
-            print(table.query(id))
+            result = table.query(id)
         elif opts["upsert"]:
             table.upsert(id, value)
         elif opts["delete"]:
             table.delete(id)
-    print("Table is now", table)
+    print("\n".join(table.pretty()))
+    if opts["query"]:
+        print("Result:", result)
 
 main()
