@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Tuple, List
+import os
 import time
 
 SEGMENT_SIZE = 4
@@ -58,7 +59,7 @@ def find_id(table : list[SegmentPointer], id : int):
         if id >= p.min and id <= p.max:
             segment = readSegment(p.id)
             index = next((i for i, r in enumerate(segment.rows) if r[0] == id), None)
-            if index:
+            if index is not None:
                 return p_index, segment, index
 
     return (None, None, None)
@@ -99,9 +100,30 @@ def upsert(name : str, id : int, value : str):
 def query(name : str, id : int):
     table = readTable(name)
     _, segment, index = find_id(table, id)
-    if not segment:
+    if segment == None:
         return None
     return segment.rows[index][1]
+
+def deleteSegment(id : str):
+    os.remove(f"segments/{id}")
+
+def delete(name : str, id : int):
+    table = readTable(name)
+    p_index, segment, index = find_id(table, id)
+    print("deleting from", segment)
+    if segment == None:
+        return
+
+    if table[p_index].size == 1:
+        deleteSegment(segment.id)
+        table.pop(p_index)
+        writeTable(name, table)
+    else:
+        # TODO: we should update the min/max.
+        segment.rows.pop(index)
+        writeSegment(segment)
+        table[p_index].size -= 1
+        writeTable(name, table)
 
 
 def __main__():
@@ -117,6 +139,10 @@ def __main__():
     upsert("t1", 3, "Binish")
     print(readTable("t1"))
     print(query("t1", 2))
+    print(query("t1", 1))
+    delete("t1", 3)
+    print(readTable("t1"))
+    print(query("t1", 1))
 
 
 __main__()
